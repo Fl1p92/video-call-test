@@ -1,0 +1,6 @@
+aiohttp
+asyncpg
+gunicorn
+ipdb
+ipython
+python-socketio

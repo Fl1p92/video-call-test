@@ -1,0 +1,33 @@
+version: "3.7"
+
+volumes:
+  local_postgres_data: {}
+
+services:
+  backend:
+    build: .
+    container_name: backend
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    env_file: .env
+    depends_on:
+      - postgres
+    volumes:
+      - .:/srv/video-call-test
+    stdin_open: true
+    tty: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  postgres:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: postgres
+    env_file: .env
+    restart: always
+    volumes:
+      - local_postgres_data:/var/lib/postgresql/data
