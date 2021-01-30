@@ -3,4 +3,4 @@ asyncpg
 gunicorn
 ipdb
 ipython
-python-socketio
+python-socketio==4.6.1
