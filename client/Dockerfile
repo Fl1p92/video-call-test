@@ -6,3 +6,7 @@ ENV PROJECT_ROOT /srv/video-call-test
 
 # Set the working directory
 WORKDIR $PROJECT_ROOT/client
+
+# Install Jinja2
+RUN pip install --upgrade pip
+RUN pip install Jinja2

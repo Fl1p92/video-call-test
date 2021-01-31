@@ -8,3 +8,4 @@ __pycache__/
 htmlcov/
 .env
 .pip-tools/
+index.html

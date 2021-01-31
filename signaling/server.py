@@ -1,3 +1,4 @@
+import os
 from aiohttp import web
 import socketio
 
@@ -28,4 +29,4 @@ async def data(sid, data):
 
 
 if __name__ == '__main__':
-    web.run_app(app, port=9999)
+    web.run_app(app, port=int(os.environ.get('SIGNALING_PORT', 9999)))

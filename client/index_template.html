@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Video call test</title>
+</head>
+<body>
+<p>Your webcam:</p>
+<video id="localStream" autoplay playsinline muted></video>
+<p>Interlocutor webcam:</p>
+<video id="remoteStream" autoplay playsinline></video>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.1/socket.io.js"
+        integrity="sha512-AcZyhRP/tbAEsXCCGlziPun5iFvcSUpEz2jKkx0blkYKbxU81F+iq8FURwPn1sYFeksJ+sDDrI5XujsqSobWdQ=="
+        crossorigin="anonymous"></script>
+<script>
+    const SIGNALING_SERVER_URL = 'http://{{ signaling_ip }}:{{ signaling_port }}';
+</script>
+<script src="main.js"></script>
+
+</body>
+</html>
