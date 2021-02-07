@@ -2,10 +2,10 @@
 FROM python:3.8.7
 
 # Set the envs
-ENV PROJECT_ROOT /srv/video-call-test
+ENV PROJECT_ROOT /srv/video-call-test/client
 
 # Set the working directory
-WORKDIR $PROJECT_ROOT/client
+WORKDIR $PROJECT_ROOT
 
 # Install Jinja2
 RUN pip install --upgrade pip

@@ -5,9 +5,9 @@ volumes:
 
 services:
   backend:
-    build: .
+    build: ./backend/
     container_name: backend
-    command: python ./signaling/server.py
+    command: python server.py
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
       - "${SIGNALING_PORT}:${SIGNALING_PORT}"

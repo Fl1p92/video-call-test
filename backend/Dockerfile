@@ -2,7 +2,8 @@
 FROM python:3.8.7
 
 # Set the envs
-ENV PROJECT_ROOT /srv/video-call-test
+ENV PROJECT_ROOT /srv/video-call-test/backend
+ENV PYTHONPATH /srv/video-call-test:$PYTHONPATH
 
 # Set the working directory
 WORKDIR $PROJECT_ROOT

@@ -1,6 +1,9 @@
 aiohttp
-asyncpg
+alembic
+asyncpgsa
 gunicorn
 ipdb
 ipython
 python-socketio==4.6.1
+psycopg2
+SQLAlchemy
