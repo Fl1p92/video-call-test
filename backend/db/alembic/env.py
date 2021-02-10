@@ -5,6 +5,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from backend.db import models
+from backend.settings import DB_URL
 
 
 # this is the Alembic Config object, which provides
@@ -20,7 +21,7 @@ fileConfig(config.config_file_name)
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 target_metadata = models.metadata
-config.set_main_option('sqlalchemy.url', os.environ.get('DB_URL', 'driver://user:pass@localhost/dbname'))
+config.set_main_option('sqlalchemy.url', DB_URL)
 
 
 # other values from the config, defined by the needs of env.py,

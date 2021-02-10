@@ -4,10 +4,18 @@
 #
 #    pip-compile requirements.in
 #
+aiohttp-apispec==2.2.1
+    # via -r requirements.in
 aiohttp==3.7.3
+    # via
+    #   -r requirements.in
+    #   aiohttp-apispec
+aiomisc==11.1.11
     # via -r requirements.in
 alembic==1.5.4
     # via -r requirements.in
+apispec==3.3.2
+    # via aiohttp-apispec
 async-timeout==3.0.1
     # via aiohttp
 asyncpg==0.21.0
@@ -20,6 +28,8 @@ backcall==0.2.0
     # via ipython
 chardet==3.0.4
     # via aiohttp
+colorlog==4.7.2
+    # via aiomisc
 decorator==4.4.2
     # via ipython
 gunicorn==20.0.4
@@ -36,10 +46,18 @@ ipython==7.20.0
     #   ipdb
 jedi==0.18.0
     # via ipython
+jinja2==2.11.3
+    # via aiohttp-apispec
 mako==1.1.4
     # via alembic
 markupsafe==1.1.1
-    # via mako
+    # via
+    #   jinja2
+    #   mako
+marshmallow==3.10.0
+    # via
+    #   -r requirements.in
+    #   webargs
 multidict==5.1.0
     # via
     #   aiohttp
@@ -82,6 +100,8 @@ typing-extensions==3.7.4.3
     # via aiohttp
 wcwidth==0.2.5
     # via prompt-toolkit
+webargs==5.5.3
+    # via aiohttp-apispec
 yarl==1.6.3
     # via aiohttp
 

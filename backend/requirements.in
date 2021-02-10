@@ -1,9 +1,12 @@
 aiohttp
+aiohttp-apispec
+aiomisc
 alembic
 asyncpgsa
 gunicorn
 ipdb
 ipython
+marshmallow
 python-socketio==4.6.1
 psycopg2
 SQLAlchemy

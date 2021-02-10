@@ -12,8 +12,8 @@ env = Environment(
 template = env.get_template('index_template.html')
 
 rendered_page = template.render(
-    signaling_ip=os.environ.get('SIGNALING_IP', 'localhost'),
-    signaling_port=os.environ.get('SIGNALING_PORT', '9999'),
+    signaling_ip=os.environ.get('BACKEND_IP', 'localhost'),
+    signaling_port=os.environ.get('BACKEND_PORT', '8080'),
 )
 
 with open('index.html', 'w', encoding="utf8") as file:

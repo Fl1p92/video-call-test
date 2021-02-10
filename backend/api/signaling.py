@@ -1,12 +1,11 @@
-import os
-from aiohttp import web
 import socketio
+
+from backend import settings
+
 
 ROOM = 'room'
 
-sio = socketio.AsyncServer(cors_allowed_origins=os.environ.get('ALLOWED_ORIGINS', []), ping_timeout=35)
-app = web.Application()
-sio.attach(app)
+sio = socketio.AsyncServer(cors_allowed_origins=settings.ALLOWED_ORIGINS, ping_timeout=35)
 
 
 @sio.event
@@ -26,7 +25,3 @@ def disconnect(sid):
 async def data(sid, data):
     print('Message from {}: {}'.format(sid, data))
     await sio.emit('data', data, room=ROOM, skip_sid=sid)
-
-
-if __name__ == '__main__':
-    web.run_app(app, port=int(os.environ.get('SIGNALING_PORT', 9999)))

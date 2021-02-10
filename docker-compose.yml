@@ -7,10 +7,9 @@ services:
   backend:
     build: ./backend/
     container_name: backend
-    command: python server.py
+    command: python -m api
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
-      - "${SIGNALING_PORT}:${SIGNALING_PORT}"
     env_file: .env
     depends_on:
       - postgres
