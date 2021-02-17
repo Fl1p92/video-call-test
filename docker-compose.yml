@@ -49,6 +49,8 @@ services:
   postgres:
     image: postgres:${POSTGRES_VERSION}
     container_name: postgres
+    ports:
+    - "5432:5432"
     env_file: .env
     restart: always
     volumes:

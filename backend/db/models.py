@@ -52,24 +52,25 @@ class Base:
 class User(Base):
     email = Column(String, nullable=False, unique=True)
     username = Column(String, nullable=False, unique=True)
+    password = Column(String, nullable=False)
     bill = relationship('Bill', uselist=False, back_populates='user')
 
 
 class Bill(Base):
-    user_id = Column(Integer, ForeignKey('users.id'))
+    user_id = Column(Integer, ForeignKey('users.id', onupdate='CASCADE', ondelete='CASCADE'))
     user = relationship('User', back_populates='bill')
     balance = Column(Numeric, nullable=False)
     tariff = Column(Numeric, nullable=False)
 
 
 class Payment(Base):
-    bill_id = Column(Integer, ForeignKey('bills.id'))
+    bill_id = Column(Integer, ForeignKey('bills.id', onupdate='CASCADE', ondelete='CASCADE'))
     bill = relationship('Bill', back_populates='payments')
     amount = Column(Numeric, nullable=False)
 
 
 class Call(Base):
-    caller_id = Column(Integer, ForeignKey('users.id'))
-    callee_id = Column(Integer, ForeignKey('users.id'))
+    caller_id = Column(Integer, ForeignKey('users.id', onupdate='CASCADE', ondelete='CASCADE'))
+    callee_id = Column(Integer, ForeignKey('users.id', onupdate='CASCADE', ondelete='CASCADE'))
     duration = Column(Interval)
     status = Column(EnumCol(CallStatus, name='call_status'), nullable=False)

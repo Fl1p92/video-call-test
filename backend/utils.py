@@ -4,7 +4,7 @@ from collections import AsyncIterable
 from aiohttp.web_app import Application
 from asyncpgsa import PG
 from asyncpgsa.transactionmanager import ConnectionTransactionContextManager
-from sqlalchemy import Numeric, cast, func
+from passlib.hash import sha256_crypt
 from sqlalchemy.sql import Select
 
 from backend import settings
@@ -30,8 +30,18 @@ async def setup_pg(app: Application) -> PG:
         log.info(f'Disconnected from database: {settings.DB_INFO}')
 
 
-def rounded(column, fraction: int = 2):
-    return func.round(cast(column, Numeric), fraction)
+def make_user_password_hash(raw_password: str) ->  str:
+    """
+    Turn a plain-text password into a hash for database storage.
+    """
+    return sha256_crypt.hash(raw_password)
+
+
+def check_user_password(raw_password: str, hashed_password: str) -> bool:
+    """
+    Return a boolean of whether the raw_password was correct.
+    """
+    return sha256_crypt.verify(raw_password, hashed_password)
 
 
 class SelectQuery(AsyncIterable):

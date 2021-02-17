@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from decimal import Decimal
 
 
@@ -15,3 +16,7 @@ DEFAULT_BALANCE = Decimal('0.00')
 
 # Default tariff, 50 cent
 DEFAULT_TARIFF = Decimal('0.50')
+
+# JWT secret
+JWT_SECRET = os.environ.get('JWT_SECRET', 'top_secret')
+JWT_EXPIRATION_DELTA = timedelta(days=int(os.environ.get('JWT_EXPIRATION_DELTA_DAYS', 14)))

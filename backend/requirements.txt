@@ -6,10 +6,13 @@
 #
 aiohttp-apispec==2.2.1
     # via -r requirements.in
+aiohttp-jwt==0.6.1
+    # via -r requirements.in
 aiohttp==3.7.3
     # via
     #   -r requirements.in
     #   aiohttp-apispec
+    #   aiohttp-jwt
 aiomisc==11.1.11
     # via -r requirements.in
 alembic==1.5.4
@@ -64,6 +67,8 @@ multidict==5.1.0
     #   yarl
 parso==0.8.1
     # via jedi
+passlib==1.7.4
+    # via -r requirements.in
 pexpect==4.8.0
     # via ipython
 pickleshare==0.7.5
@@ -76,6 +81,8 @@ ptyprocess==0.7.0
     # via pexpect
 pygments==2.7.4
     # via ipython
+pyjwt==2.0.1
+    # via aiohttp-jwt
 python-dateutil==2.8.1
     # via alembic
 python-editor==1.0.4

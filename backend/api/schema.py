@@ -26,8 +26,18 @@ class BillSchema(BaseSchema):
 class UserSchema(BaseSchema):
     email = fields.Email(required=True)
     username = fields.Str(required=True, validate=Length(min=1, max=256))
+    password = fields.Str(required=True, validate=Length(min=7))
     bill = fields.Nested(BillSchema(), required=True)
 
 
+class JWTTokenSchema(Schema):
+    token = fields.Str(required=True)
+    user = fields.Nested(UserSchema(only=('id', 'email', 'username')))
+
+
 class UserCreateResponseSchema(Schema):
-    data = fields.Nested(UserSchema(), required=True)
+    data = fields.Nested(UserSchema(exclude=('password', )), required=True)
+
+
+class JWTTokenResponseSchema(Schema):
+    data = fields.Nested(JWTTokenSchema(), required=True)

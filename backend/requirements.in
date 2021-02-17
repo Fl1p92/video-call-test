@@ -1,5 +1,6 @@
 aiohttp
 aiohttp-apispec
+aiohttp_jwt
 aiomisc
 alembic
 asyncpgsa
@@ -7,6 +8,7 @@ gunicorn
 ipdb
 ipython
 marshmallow
+passlib
 python-socketio==4.6.1
 psycopg2
 SQLAlchemy
