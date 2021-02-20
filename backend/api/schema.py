@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from marshmallow import Schema, fields, ValidationError, validates, validates_schema
 from marshmallow.validate import Length, Range, OneOf
 
@@ -7,8 +5,15 @@ from backend.db.models import CallStatus
 
 
 class BaseSchema(Schema):
-    id = fields.Int(validate=Range(min=0), strict=True, required=True)
-    created = fields.DateTime(format='iso', required=True)
+    id = fields.Int(validate=Range(min=0), strict=True, dump_only=True)
+    created = fields.DateTime(format='iso', dump_only=True)
+
+
+class CallSchema(BaseSchema):
+    caller_id = fields.Int(validate=Range(min=0), strict=True, required=True)
+    callee_id = fields.Int(validate=Range(min=0), strict=True, required=True)
+    duration = fields.TimeDelta()
+    status = fields.Str(validate=OneOf([status.name for status in CallStatus]))
 
 
 class PaymentSchema(BaseSchema):
@@ -20,14 +25,17 @@ class BillSchema(BaseSchema):
    user_id = fields.Int(validate=Range(min=0), strict=True, required=True)
    balance = fields.Decimal(places=2, required=True)
    tariff = fields.Decimal(places=2, required=True)
-   payments = fields.Nested(PaymentSchema(), many=True)
 
 
 class UserSchema(BaseSchema):
     email = fields.Email(required=True)
     username = fields.Str(required=True, validate=Length(min=1, max=256))
-    password = fields.Str(required=True, validate=Length(min=7))
-    bill = fields.Nested(BillSchema(), required=True)
+    password = fields.Str(required=True, validate=Length(min=7), load_only=True)
+
+
+class UserPatchSchema(BaseSchema):
+    email = fields.Email()
+    username = fields.Str(validate=Length(min=1, max=256))
 
 
 class JWTTokenSchema(Schema):
@@ -35,9 +43,16 @@ class JWTTokenSchema(Schema):
     user = fields.Nested(UserSchema(only=('id', 'email', 'username')))
 
 
-class UserCreateResponseSchema(Schema):
+class UserDetailsResponseSchema(Schema):
     data = fields.Nested(UserSchema(exclude=('password', )), required=True)
 
 
 class JWTTokenResponseSchema(Schema):
     data = fields.Nested(JWTTokenSchema(), required=True)
+
+
+class UserListResponseSchema(Schema):
+    data = fields.Nested(UserSchema(exclude=('password', ), many=True), required=True)
+
+
+class NoContentResponseSchema(Schema): pass

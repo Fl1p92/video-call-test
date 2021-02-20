@@ -57,7 +57,7 @@ class User(Base):
 
 
 class Bill(Base):
-    user_id = Column(Integer, ForeignKey('users.id', onupdate='CASCADE', ondelete='CASCADE'))
+    user_id = Column(Integer, ForeignKey('users.id', onupdate='CASCADE', ondelete='CASCADE'), unique=True)
     user = relationship('User', back_populates='bill')
     balance = Column(Numeric, nullable=False)
     tariff = Column(Numeric, nullable=False)
@@ -74,3 +74,10 @@ class Call(Base):
     callee_id = Column(Integer, ForeignKey('users.id', onupdate='CASCADE', ondelete='CASCADE'))
     duration = Column(Interval)
     status = Column(EnumCol(CallStatus, name='call_status'), nullable=False)
+
+
+# sql alchemy tables
+users_t = User.__table__
+bills_t = Bill.__table__
+payments_t = Payment.__table__
+calls_t = Call.__table__

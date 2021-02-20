@@ -13,7 +13,7 @@ aiohttp==3.7.3
     #   -r requirements.in
     #   aiohttp-apispec
     #   aiohttp-jwt
-aiomisc==11.1.11
+aiomisc==12.0.0
     # via -r requirements.in
 alembic==1.5.4
     # via -r requirements.in
@@ -21,9 +21,9 @@ apispec==3.3.2
     # via aiohttp-apispec
 async-timeout==3.0.1
     # via aiohttp
-asyncpg==0.21.0
+asyncpg==0.22.0
     # via asyncpgsa
-asyncpgsa==0.26.3
+asyncpgsa==0.27.0
     # via -r requirements.in
 attrs==20.3.0
     # via aiohttp
@@ -73,13 +73,13 @@ pexpect==4.8.0
     # via ipython
 pickleshare==0.7.5
     # via ipython
-prompt-toolkit==3.0.14
+prompt-toolkit==3.0.16
     # via ipython
 psycopg2==2.8.6
     # via -r requirements.in
 ptyprocess==0.7.0
     # via pexpect
-pygments==2.7.4
+pygments==2.8.0
     # via ipython
 pyjwt==2.0.1
     # via aiohttp-jwt
