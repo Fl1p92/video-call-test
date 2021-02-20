@@ -31,10 +31,10 @@ class BaseView(View):
 
 class LoginAPIView(BaseView):
     """
-    Check the credentials and return the JWT Token
+    Checks the credentials and return the JWT Token
     if the credentials are valid and authenticated.
     """
-    URL_PATH = '/api/v1/login/'
+    URL_PATH = '/api/v1/auth/login/'
 
     @docs(tags=['auth'],
           summary='Login',
@@ -63,6 +63,9 @@ class LoginAPIView(BaseView):
 
 
 class UserCreateAPIView(BaseView):
+    """
+    Creates new user.
+    """
     URL_PATH = '/api/v1/users/create/'
 
     @docs(tags=['users'],
@@ -100,7 +103,7 @@ class UsersListAPIView(BaseView):
     """
     Returns information for all users.
     """
-    URL_PATH = '/api/v1/users/'
+    URL_PATH = '/api/v1/users/list/'
 
     @docs(tags=['users'],
           summary='List of users',
@@ -166,7 +169,7 @@ class UserRetrieveUpdateDestroyAPIView(BaseView):
         async with self.pg.transaction() as conn:
             validated_data = self.request['validated_data']
 
-            # Blocking will avoid race conditions between concurrent user change requests.
+            # Blocking will avoid race conditions between concurrent user change requests
             await conn.fetch('SELECT pg_advisory_xact_lock($1)', self.user_id)
 
             patch_query = users_t.update().values(validated_data).where(users_t.c.id == self.user_id)
@@ -189,3 +192,138 @@ class UserRetrieveUpdateDestroyAPIView(BaseView):
         delete_query = users_t.delete().where(users_t.c.id == self.user_id)
         await self.pg.fetch(delete_query)
         return Response(body={}, status=HTTPStatus.NO_CONTENT)
+
+
+class BillRetrieveUpdateAPIView(BaseView):
+    """
+    Returns or changes bill information for a given user.
+    """
+    URL_PATH = r'/api/v1/bills/{user_id:\d+}/'
+
+    async def _iter(self) -> StreamResponse:
+        await self.check_user_exists()
+        return await super()._iter()
+
+    @property
+    def user_id(self):
+        return int(self.request.match_info.get('user_id'))
+
+    async def check_user_exists(self):
+        query = select([
+            exists().where(users_t.c.id == self.user_id)
+        ])
+        if not await self.pg.fetchval(query):
+            raise HTTPNotFound()
+
+    async def get_bill(self):
+        bill_query = bills_t.select().where(bills_t.c.user_id == self.user_id)
+        bill = await self.pg.fetchrow(bill_query)
+        return bill
+
+    @docs(tags=['bills'],
+          summary='Retrieve bill',
+          description='Returns bill information for a given user',
+          security=jwt_security)
+    @response_schema(schema.BillDetailsResponseSchema(), code=HTTPStatus.OK.value)
+    async def get(self):
+        bill = await self.get_bill()
+        return Response(body={'data': bill}, status=HTTPStatus.OK)
+
+    @docs(tags=['bills'],
+          summary='Update bill',
+          description='Updates bill information for a given user',
+          security=jwt_security)
+    @request_schema(schema.BillSchema(only=('tariff', )))
+    @response_schema(schema.BillDetailsResponseSchema(), code=HTTPStatus.OK.value)
+    async def patch(self):
+        async with self.pg.transaction() as conn:
+            validated_data = self.request['validated_data']
+
+            # Blocking will avoid race conditions between concurrent bill change requests
+            await conn.fetch('SELECT pg_advisory_xact_lock($1)', self.user_id)
+
+            patch_query = bills_t.update().values(validated_data).where(bills_t.c.user_id == self.user_id)
+            await conn.fetch(patch_query)
+
+        # Get up-to-date bill information
+        bill = await self.get_bill()
+        return Response(body={'data': bill}, status=HTTPStatus.OK)
+
+
+class PaymentCreateAPIView(BaseView):
+    """
+    Creates new payment for a given bill.
+    """
+    URL_PATH = '/api/v1/payments/create/'
+
+    async def check_bill_exists(self, bill_id):
+        query = select([
+            exists().where(bills_t.c.id == bill_id)
+        ])
+        if not await self.pg.fetchval(query):
+            raise HTTPNotFound()
+
+    async def update_bill_balance(self, bill_id):
+        async with self.pg.transaction() as conn:
+            amount = self.request['validated_data'].get('amount')
+
+            # Blocking will avoid race conditions between concurrent bill change requests
+            await conn.fetch('SELECT pg_advisory_xact_lock($1)', bill_id)
+
+            query = bills_t.update().values(balance=bills_t.c.balance + amount).where(bills_t.c.id == bill_id)
+            await conn.fetch(query)
+
+    @docs(tags=['bills'],
+          summary='Create payment',
+          description='Creates new payment for a given user',
+          security=jwt_security)
+    @request_schema(schema.PaymentSchema())
+    @response_schema(schema.PaymentDetailsResponseSchema(), code=HTTPStatus.CREATED.value)
+    async def post(self):
+        async with self.pg.transaction() as conn:
+            validated_data = self.request['validated_data']
+            bill_id = validated_data.get('bill_id')
+
+            # Check bill id exists
+            await self.check_bill_exists(bill_id)
+
+            # Create new payment
+            insert_payment_query = payments_t.insert().returning(payments_t).values(validated_data)
+            new_payment = await conn.fetchrow(insert_payment_query)
+
+        # Update bill balance by the amount of the new payment
+        await self.update_bill_balance(bill_id)
+
+        return Response(body={'data': new_payment}, status=HTTPStatus.CREATED)
+
+
+class PaymentsListAPIView(BaseView):
+    """
+    Returns information for all payments.
+    """
+    URL_PATH = r'/api/v1/payments/{bill_id:\d+}/list/'
+
+    async def _iter(self) -> StreamResponse:
+        await self.check_bill_exists()
+        return await super()._iter()
+
+    @property
+    def bill_id(self):
+        return int(self.request.match_info.get('bill_id'))
+
+    async def check_bill_exists(self):
+        query = select([
+            exists().where(bills_t.c.id == self.bill_id)
+        ])
+        if not await self.pg.fetchval(query):
+            raise HTTPNotFound()
+
+    @docs(tags=['bills'],
+          summary='List of payments',
+          description='Returns information for all payments',
+          security=jwt_security)
+    @response_schema(schema.PaymentListResponseSchema(), code=HTTPStatus.OK.value)
+    async def get(self):
+        payments_query = payments_t.select().where(payments_t.c.bill_id == self.bill_id)
+        body = SelectQuery(query=payments_query, transaction_ctx=self.pg.transaction())
+        return Response(body=body, status=HTTPStatus.OK)

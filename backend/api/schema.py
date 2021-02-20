@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields, ValidationError, validates, validates_schema
+from marshmallow import Schema, fields
 from marshmallow.validate import Length, Range, OneOf
 
 from backend.db.models import CallStatus
@@ -18,13 +18,13 @@ class CallSchema(BaseSchema):
 
 class PaymentSchema(BaseSchema):
     bill_id = fields.Int(validate=Range(min=0), strict=True, required=True)
-    amount = fields.Decimal(places=2, required=True)
+    amount = fields.Decimal(validate=Range(min=0, min_inclusive=False), places=2, required=True)
 
 
 class BillSchema(BaseSchema):
-   user_id = fields.Int(validate=Range(min=0), strict=True, required=True)
-   balance = fields.Decimal(places=2, required=True)
-   tariff = fields.Decimal(places=2, required=True)
+    user_id = fields.Int(validate=Range(min=0), strict=True, required=True)
+    balance = fields.Decimal(places=2, dump_only=True)
+    tariff = fields.Decimal(validate=Range(min=0, min_inclusive=False), places=2, required=True)
 
 
 class UserSchema(BaseSchema):
@@ -55,4 +55,17 @@ class UserListResponseSchema(Schema):
     data = fields.Nested(UserSchema(exclude=('password', ), many=True), required=True)
 
 
-class NoContentResponseSchema(Schema): pass
+class NoContentResponseSchema(Schema):
+    pass
+
+
+class BillDetailsResponseSchema(Schema):
+    data = fields.Nested(BillSchema(), required=True)
+
+
+class PaymentDetailsResponseSchema(Schema):
+    data = fields.Nested(PaymentSchema(), required=True)
+
+
+class PaymentListResponseSchema(Schema):
+    data = fields.Nested(PaymentSchema(many=True), required=True)
