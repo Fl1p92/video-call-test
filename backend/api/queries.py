@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from backend.db.models import users_t, bills_t, payments_t, calls_t
+from backend.db.models import users_t
 
 
 MAIN_USER_QUERY = select([

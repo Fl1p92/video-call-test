@@ -12,7 +12,7 @@ class BaseSchema(Schema):
 class CallSchema(BaseSchema):
     caller_id = fields.Int(validate=Range(min=0), strict=True, required=True)
     callee_id = fields.Int(validate=Range(min=0), strict=True, required=True)
-    duration = fields.TimeDelta()
+    duration = fields.Int(validate=Range(min=0), strict=True)
     status = fields.Str(validate=OneOf([status.name for status in CallStatus]))
 
 
@@ -43,6 +43,10 @@ class JWTTokenSchema(Schema):
     user = fields.Nested(UserSchema(only=('id', 'email', 'username')))
 
 
+class BillDetailsSchema(BillSchema):
+    max_call_duration_minutes = fields.Int(validate=Range(min=1), strict=True)
+
+
 class UserDetailsResponseSchema(Schema):
     data = fields.Nested(UserSchema(exclude=('password', )), required=True)
 
@@ -60,7 +64,7 @@ class NoContentResponseSchema(Schema):
 
 
 class BillDetailsResponseSchema(Schema):
-    data = fields.Nested(BillSchema(), required=True)
+    data = fields.Nested(BillDetailsSchema(), required=True)
 
 
 class PaymentDetailsResponseSchema(Schema):
@@ -69,3 +73,11 @@ class PaymentDetailsResponseSchema(Schema):
 
 class PaymentListResponseSchema(Schema):
     data = fields.Nested(PaymentSchema(many=True), required=True)
+
+
+class CallDetailsResponseSchema(Schema):
+    data = fields.Nested(CallSchema(), required=True)
+
+
+class CallListResponseSchema(Schema):
+    data = fields.Nested(CallSchema(many=True), required=True)

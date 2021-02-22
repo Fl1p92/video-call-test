@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from http import HTTPStatus
 
 import jwt
@@ -9,11 +10,11 @@ from aiohttp_apispec import docs, request_schema, response_schema
 from asyncpg import UniqueViolationError
 from asyncpgsa import PG
 from marshmallow import ValidationError
-from sqlalchemy import exists, select, or_
+from sqlalchemy import exists, select, or_, Table
 
 from backend import settings
 from backend.api import schema, queries
-from backend.db.models import users_t, bills_t, payments_t, calls_t
+from backend.db.models import users_t, bills_t, payments_t, calls_t, CallStatus
 from backend.utils import make_user_password_hash, check_user_password, SelectQuery
 
 
@@ -27,6 +28,26 @@ class BaseView(View):
     @property
     def pg(self) -> PG:
         return self.request.app['pg']
+
+
+class CheckObjectsExistsMixin:
+    object_id_path: str
+    check_exists_table: Table
+
+    async def _iter(self) -> StreamResponse:
+        await self.check_object_exists()
+        return await super()._iter()
+
+    @property
+    def object_id(self):
+        return int(self.request.match_info.get(self.object_id_path))
+
+    async def check_object_exists(self):
+        query = select([
+            exists().where(self.check_exists_table.c.id == self.object_id)
+        ])
+        if not await self.pg.fetchval(query):
+            raise HTTPNotFound()
 
 
 class LoginAPIView(BaseView):
@@ -43,7 +64,7 @@ class LoginAPIView(BaseView):
     @response_schema(schema.JWTTokenResponseSchema(), code=HTTPStatus.OK.value)
     async def post(self):
         validated_data = self.request['validated_data']
-        get_user_query = users_t.select().where(users_t.c.email == validated_data['email'])
+        get_user_query = users_t.select(users_t.c.email == validated_data['email'])
         user = await self.pg.fetchrow(get_user_query)
         if user is not None:
             if check_user_password(validated_data['password'], user['password']):
@@ -59,7 +80,7 @@ class LoginAPIView(BaseView):
                     'user': {k: v for k, v in payload_data.items() if k != 'exp'}
                 }
                 return Response(body={'data': response_data}, status=HTTPStatus.OK)
-        raise ValidationError({f'non_field_errors': ['Unable to log in with provided credentials.']})
+        raise ValidationError({'non_field_errors': ['Unable to log in with provided credentials.']})
 
 
 class UserCreateAPIView(BaseView):
@@ -124,35 +145,22 @@ class UsersListAPIView(BaseView):
         return Response(body=body, status=HTTPStatus.OK)
 
 
-class UserRetrieveUpdateDestroyAPIView(BaseView):
+class UserRetrieveUpdateDestroyAPIView(CheckObjectsExistsMixin, BaseView):
     """
-    Returns, changes or delete information for a given user.
+    Returns, changes or delete information for a user.
     """
     URL_PATH = r'/api/v1/users/{user_id:\d+}/'
-
-    async def _iter(self) -> StreamResponse:
-        await self.check_user_exists()
-        return await super()._iter()
-
-    @property
-    def user_id(self):
-        return int(self.request.match_info.get('user_id'))
-
-    async def check_user_exists(self):
-        query = select([
-            exists().where(users_t.c.id == self.user_id)
-        ])
-        if not await self.pg.fetchval(query):
-            raise HTTPNotFound()
+    object_id_path = 'user_id'
+    check_exists_table = users_t
 
     async def get_user(self):
-        user_query = queries.MAIN_USER_QUERY.where(users_t.c.id == self.user_id)
+        user_query = queries.MAIN_USER_QUERY.where(users_t.c.id == self.object_id)
         user = await self.pg.fetchrow(user_query)
         return user
 
     @docs(tags=['users'],
           summary='Retrieve user',
-          description='Returns information for a given user',
+          description='Returns information for a user',
           security=jwt_security)
     @response_schema(schema.UserDetailsResponseSchema(), code=HTTPStatus.OK.value)
     async def get(self):
@@ -161,7 +169,7 @@ class UserRetrieveUpdateDestroyAPIView(BaseView):
 
     @docs(tags=['users'],
           summary='Update user',
-          description='Updates information for a given user',
+          description='Updates information for a user',
           security=jwt_security)
     @request_schema(schema.UserPatchSchema())
     @response_schema(schema.UserDetailsResponseSchema(), code=HTTPStatus.OK.value)
@@ -170,9 +178,9 @@ class UserRetrieveUpdateDestroyAPIView(BaseView):
             validated_data = self.request['validated_data']
 
             # Blocking will avoid race conditions between concurrent user change requests
-            await conn.fetch('SELECT pg_advisory_xact_lock($1)', self.user_id)
+            await conn.fetch('SELECT pg_advisory_xact_lock($1)', self.object_id)
 
-            patch_query = users_t.update().values(validated_data).where(users_t.c.id == self.user_id)
+            patch_query = users_t.update().values(validated_data).where(users_t.c.id == self.object_id)
             try:
                 await conn.fetch(patch_query)
             except UniqueViolationError as err:
@@ -185,44 +193,33 @@ class UserRetrieveUpdateDestroyAPIView(BaseView):
 
     @docs(tags=['users'],
           summary='Delete user',
-          description='Deletes information for a given user',
+          description='Deletes information for a user',
           security=jwt_security)
     @response_schema(schema.NoContentResponseSchema(), code=HTTPStatus.NO_CONTENT.value)
     async def delete(self):
-        delete_query = users_t.delete().where(users_t.c.id == self.user_id)
+        delete_query = users_t.delete().where(users_t.c.id == self.object_id)
         await self.pg.fetch(delete_query)
         return Response(body={}, status=HTTPStatus.NO_CONTENT)
 
 
-class BillRetrieveUpdateAPIView(BaseView):
+class BillRetrieveUpdateAPIView(CheckObjectsExistsMixin, BaseView):
     """
-    Returns or changes bill information for a given user.
+    Returns or changes bill information for a user.
     """
     URL_PATH = r'/api/v1/bills/{user_id:\d+}/'
-
-    async def _iter(self) -> StreamResponse:
-        await self.check_user_exists()
-        return await super()._iter()
-
-    @property
-    def user_id(self):
-        return int(self.request.match_info.get('user_id'))
-
-    async def check_user_exists(self):
-        query = select([
-            exists().where(users_t.c.id == self.user_id)
-        ])
-        if not await self.pg.fetchval(query):
-            raise HTTPNotFound()
+    object_id_path = 'user_id'
+    check_exists_table = users_t
 
     async def get_bill(self):
-        bill_query = bills_t.select().where(bills_t.c.user_id == self.user_id)
-        bill = await self.pg.fetchrow(bill_query)
+        bill_query = bills_t.select(bills_t.c.user_id == self.object_id)
+        bill = dict(await self.pg.fetchrow(bill_query))
+        max_call_duration_minutes = bill['balance'] // bill['tariff']
+        bill['max_call_duration_minutes'] = max_call_duration_minutes if max_call_duration_minutes > 0 else 0
         return bill
 
     @docs(tags=['bills'],
           summary='Retrieve bill',
-          description='Returns bill information for a given user',
+          description='Returns bill information for a user',
           security=jwt_security)
     @response_schema(schema.BillDetailsResponseSchema(), code=HTTPStatus.OK.value)
     async def get(self):
@@ -231,7 +228,7 @@ class BillRetrieveUpdateAPIView(BaseView):
 
     @docs(tags=['bills'],
           summary='Update bill',
-          description='Updates bill information for a given user',
+          description='Updates bill information for a user',
           security=jwt_security)
     @request_schema(schema.BillSchema(only=('tariff', )))
     @response_schema(schema.BillDetailsResponseSchema(), code=HTTPStatus.OK.value)
@@ -240,9 +237,9 @@ class BillRetrieveUpdateAPIView(BaseView):
             validated_data = self.request['validated_data']
 
             # Blocking will avoid race conditions between concurrent bill change requests
-            await conn.fetch('SELECT pg_advisory_xact_lock($1)', self.user_id)
+            await conn.fetch('SELECT pg_advisory_xact_lock($1)', self.object_id)
 
-            patch_query = bills_t.update().values(validated_data).where(bills_t.c.user_id == self.user_id)
+            patch_query = bills_t.update().values(validated_data).where(bills_t.c.user_id == self.object_id)
             await conn.fetch(patch_query)
 
         # Get up-to-date bill information
@@ -252,7 +249,7 @@ class BillRetrieveUpdateAPIView(BaseView):
 
 class PaymentCreateAPIView(BaseView):
     """
-    Creates new payment for a given bill.
+    Creates new payment for a bill.
     """
     URL_PATH = '/api/v1/payments/create/'
 
@@ -266,16 +263,14 @@ class PaymentCreateAPIView(BaseView):
     async def update_bill_balance(self, bill_id):
         async with self.pg.transaction() as conn:
             amount = self.request['validated_data'].get('amount')
-
             # Blocking will avoid race conditions between concurrent bill change requests
             await conn.fetch('SELECT pg_advisory_xact_lock($1)', bill_id)
-
             query = bills_t.update().values(balance=bills_t.c.balance + amount).where(bills_t.c.id == bill_id)
             await conn.fetch(query)
 
     @docs(tags=['bills'],
           summary='Create payment',
-          description='Creates new payment for a given user',
+          description='Creates new payment for a user',
           security=jwt_security)
     @request_schema(schema.PaymentSchema())
     @response_schema(schema.PaymentDetailsResponseSchema(), code=HTTPStatus.CREATED.value)
@@ -297,26 +292,13 @@ class PaymentCreateAPIView(BaseView):
         return Response(body={'data': new_payment}, status=HTTPStatus.CREATED)
 
 
-class PaymentsListAPIView(BaseView):
+class PaymentsListAPIView(CheckObjectsExistsMixin, BaseView):
     """
-    Returns information for all payments.
+    Returns payments information for user bill.
     """
     URL_PATH = r'/api/v1/payments/{bill_id:\d+}/list/'
-
-    async def _iter(self) -> StreamResponse:
-        await self.check_bill_exists()
-        return await super()._iter()
-
-    @property
-    def bill_id(self):
-        return int(self.request.match_info.get('bill_id'))
-
-    async def check_bill_exists(self):
-        query = select([
-            exists().where(bills_t.c.id == self.bill_id)
-        ])
-        if not await self.pg.fetchval(query):
-            raise HTTPNotFound()
+    object_id_path = 'bill_id'
+    check_exists_table = bills_t
 
     @docs(tags=['bills'],
           summary='List of payments',
@@ -324,6 +306,96 @@ class PaymentsListAPIView(BaseView):
           security=jwt_security)
     @response_schema(schema.PaymentListResponseSchema(), code=HTTPStatus.OK.value)
     async def get(self):
-        payments_query = payments_t.select().where(payments_t.c.bill_id == self.bill_id)
+        payments_query = payments_t.select(payments_t.c.bill_id == self.object_id)
         body = SelectQuery(query=payments_query, transaction_ctx=self.pg.transaction())
+        return Response(body=body, status=HTTPStatus.OK)
+
+
+class CallCreateAPIView(BaseView):
+    """
+    Creates new call for a user.
+    """
+    URL_PATH = '/api/v1/calls/create/'
+
+    async def check_users_exists(self, caller_id, callee_id, conn):
+        if caller_id == callee_id:
+            raise ValidationError({f"non_field_errors": [f"User {caller_id} cannot call himself."]})
+        query = users_t.select(users_t.c.id.in_([caller_id, callee_id]))
+        if len(await conn.fetch(query)) != 2:
+            raise HTTPNotFound()
+
+    async def check_user_balance(self, caller_id, conn):
+        query = bills_t.select(bills_t.c.user_id == caller_id)
+        user_bill = await conn.fetchrow(query)
+        if user_bill['balance'] <= 0 or not user_bill['balance'] // user_bill['tariff']:
+            raise ValidationError({f"non_field_errors": [f"User {caller_id} doesn't have enough money to call."]})
+        return user_bill
+
+    async def update_user_balance(self, caller_bill, conn):
+        duration = self.request['validated_data'].get('duration')
+        duration_delta = relativedelta(seconds=duration.total_seconds())
+        # Rounding duration to minutes
+        duration_minutes = duration_delta.minutes + 1 if duration_delta.seconds else duration_delta.minutes
+        call_cost = int(duration_minutes) * caller_bill['tariff']
+        # Blocking will avoid race conditions between concurrent bill change requests
+        await conn.fetch('SELECT pg_advisory_xact_lock($1)', caller_bill['id'])
+        query = bills_t.update().values(balance=bills_t.c.balance - call_cost).where(bills_t.c.id == caller_bill['id'])
+        await conn.fetch(query)
+
+    @docs(tags=['calls'],
+          summary='Create call',
+          description='Creates new call for a user',
+          security=jwt_security)
+    @request_schema(schema.CallSchema())
+    @response_schema(schema.CallDetailsResponseSchema(), code=HTTPStatus.CREATED.value)
+    async def post(self):
+        async with self.pg.transaction() as conn:
+            validated_data = self.request['validated_data']
+            validated_data['duration'] = timedelta(seconds=validated_data['duration'])
+
+            # Check users availability
+            await self.check_users_exists(caller_id=validated_data.get('caller_id'),
+                                          callee_id=validated_data.get('callee_id'),
+                                          conn=conn)
+
+            # Check user balance
+            user_bill = await self.check_user_balance(caller_id=validated_data.get('caller_id'), conn=conn)
+
+            # Create new call
+            insert_call_query = calls_t.insert().returning(calls_t).values(validated_data)
+            new_call = await conn.fetchrow(insert_call_query)
+
+            # Update user balance
+            await self.update_user_balance(caller_bill=user_bill, conn=conn)
+
+        return Response(body={'data': new_call}, status=HTTPStatus.CREATED)
+
+
+class CallsListAPIView(CheckObjectsExistsMixin, BaseView):
+    """
+    Returns information about calls for user.
+    """
+    URL_PATH = r'/api/v1/calls/{user_id:\d+}/list/'
+    object_id_path = 'user_id'
+    check_exists_table = users_t
+
+    @property
+    def correct_statuses(self):
+        return {status.name for status in CallStatus}
+
+    @docs(tags=['calls'],
+          summary='List of calls',
+          description='Returns information about calls for user',
+          security=jwt_security,
+          parameters=[{
+              'in': 'query',
+              'name': 'type',
+              'description': 'Filter calls by call status'
+          }])
+    @response_schema(schema.CallListResponseSchema(), code=HTTPStatus.OK.value)
+    async def get(self):
+        calls_query = calls_t.select(or_(calls_t.c.caller_id == self.object_id, calls_t.c.callee_id == self.object_id))
+        if (filter_term := self.request.query.get('type')) and (filter_term in self.correct_statuses):
+            calls_query = calls_query.where(calls_t.c.status == filter_term)
+        body = SelectQuery(query=calls_query, transaction_ctx=self.pg.transaction())
         return Response(body=body, status=HTTPStatus.OK)
