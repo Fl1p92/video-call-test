@@ -1,3 +1,3 @@
-from asyncpgsa import pg
+from asyncpgsa import pg  # noqa
 
-from backend.api.views import *
+from backend.api.views import *  # noqa

@@ -48,7 +48,6 @@ def create_app() -> Application:
     api_key_scheme = {"type": "apiKey", "in": "header", "name": "Authorization"}
     api_spec.spec.components.security_scheme('JWT Authorization', api_key_scheme)
 
-
     # Automatic json serialization of data in HTTP responses
     PAYLOAD_REGISTRY.register(AsyncGenJSONListPayload,
                               (AsyncGeneratorType, AsyncIterable))

@@ -27,6 +27,7 @@ convention = {
 # Registry for all tables
 metadata = MetaData(naming_convention=convention)
 
+
 @unique
 class CallStatus(Enum):
     successful = auto()

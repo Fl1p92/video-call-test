@@ -30,7 +30,7 @@ async def setup_pg(app: Application) -> PG:
         log.info(f'Disconnected from database: {settings.DB_INFO}')
 
 
-def make_user_password_hash(raw_password: str) ->  str:
+def make_user_password_hash(raw_password: str) -> str:
     """
     Turn a plain-text password into a hash for database storage.
     """

@@ -13,6 +13,7 @@ aiohttp==3.7.3
     #   -r requirements.in
     #   aiohttp-apispec
     #   aiohttp-jwt
+    #   pytest-aiohttp
 aiomisc==12.0.0
     # via -r requirements.in
 alembic==1.5.4
@@ -26,19 +27,33 @@ asyncpg==0.22.0
 asyncpgsa==0.27.0
     # via -r requirements.in
 attrs==20.3.0
-    # via aiohttp
+    # via
+    #   aiohttp
+    #   pytest
 backcall==0.2.0
     # via ipython
 chardet==3.0.4
     # via aiohttp
 colorlog==4.7.2
     # via aiomisc
+coverage==5.4
+    # via pytest-cov
 decorator==4.4.2
     # via ipython
+factory-boy==3.2.0
+    # via -r requirements.in
+faker==6.5.0
+    # via factory-boy
+flake8-print==4.0.0
+    # via -r requirements.in
+flake8==3.8.4
+    # via flake8-print
 gunicorn==20.0.4
     # via -r requirements.in
 idna==3.1
     # via yarl
+iniconfig==1.1.1
+    # via pytest
 ipdb==0.13.4
     # via -r requirements.in
 ipython-genutils==0.2.0
@@ -61,10 +76,14 @@ marshmallow==3.10.0
     # via
     #   -r requirements.in
     #   webargs
+mccabe==0.6.1
+    # via flake8
 multidict==5.1.0
     # via
     #   aiohttp
     #   yarl
+packaging==20.9
+    # via pytest
 parso==0.8.1
     # via jedi
 passlib==1.7.4
@@ -73,18 +92,40 @@ pexpect==4.8.0
     # via ipython
 pickleshare==0.7.5
     # via ipython
+pluggy==0.13.1
+    # via pytest
 prompt-toolkit==3.0.16
     # via ipython
 psycopg2==2.8.6
     # via -r requirements.in
 ptyprocess==0.7.0
     # via pexpect
+py==1.10.0
+    # via pytest
+pycodestyle==2.6.0
+    # via
+    #   flake8
+    #   flake8-print
+pyflakes==2.2.0
+    # via flake8
 pygments==2.8.0
     # via ipython
 pyjwt==2.0.1
     # via aiohttp-jwt
+pyparsing==2.4.7
+    # via packaging
+pytest-aiohttp==0.3.0
+    # via -r requirements.in
+pytest-cov==2.11.1
+    # via -r requirements.in
+pytest==6.2.2
+    # via
+    #   pytest-aiohttp
+    #   pytest-cov
 python-dateutil==2.8.1
-    # via alembic
+    # via
+    #   alembic
+    #   faker
 python-editor==1.0.4
     # via alembic
 python-engineio==3.14.2
@@ -93,14 +134,23 @@ python-socketio==4.6.1
     # via -r requirements.in
 six==1.15.0
     # via
+    #   flake8-print
     #   python-dateutil
     #   python-engineio
     #   python-socketio
+    #   sqlalchemy-utils
+sqlalchemy-utils==0.36.8
+    # via -r requirements.in
 sqlalchemy==1.3.23
     # via
     #   -r requirements.in
     #   alembic
     #   asyncpgsa
+    #   sqlalchemy-utils
+text-unidecode==1.3
+    # via faker
+toml==0.10.2
+    # via pytest
 traitlets==5.0.5
     # via ipython
 typing-extensions==3.7.4.3

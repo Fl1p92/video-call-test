@@ -7,8 +7,13 @@ asyncpgsa
 gunicorn
 ipdb
 ipython
+factory-boy
+flake8-print
+pytest-aiohttp
+pytest-cov
 marshmallow
 passlib
 python-socketio==4.6.1
 psycopg2
 SQLAlchemy
+sqlalchemy_utils

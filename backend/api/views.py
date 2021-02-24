@@ -341,7 +341,7 @@ class CallCreateAPIView(BaseView):
 
     async def check_users_exists(self, caller_id, callee_id, conn):
         if caller_id == callee_id:
-            raise ValidationError({f"non_field_errors": [f"User {caller_id} cannot call himself."]})
+            raise ValidationError({"non_field_errors": [f"User {caller_id} cannot call himself."]})
         query = users_t.select(users_t.c.id.in_([caller_id, callee_id]))
         if len(await conn.fetch(query)) != 2:
             raise HTTPNotFound()
@@ -350,7 +350,7 @@ class CallCreateAPIView(BaseView):
         query = bills_t.select(bills_t.c.user_id == caller_id)
         user_bill = await conn.fetchrow(query)
         if user_bill['balance'] <= 0 or not user_bill['balance'] // user_bill['tariff']:
-            raise ValidationError({f"non_field_errors": [f"User {caller_id} doesn't have enough money to call."]})
+            raise ValidationError({"non_field_errors": [f"User {caller_id} doesn't have enough money to call."]})
         return user_bill
 
     async def update_user_balance(self, caller_bill, conn):
