@@ -3,7 +3,8 @@ from dateutil.relativedelta import relativedelta
 from http import HTTPStatus
 
 import jwt
-from aiohttp.web_exceptions import HTTPNotFound
+from aiohttp import hdrs
+from aiohttp.web_exceptions import HTTPNotFound, HTTPForbidden
 from aiohttp.web_response import Response, StreamResponse
 from aiohttp.web_urldispatcher import View
 from aiohttp_apispec import docs, request_schema, response_schema
@@ -14,6 +15,7 @@ from sqlalchemy import exists, select, or_, Table
 
 from backend import settings
 from backend.api import schema, queries
+from backend.api.permissions import IsAuthenticatedForObject
 from backend.db.models import users_t, bills_t, payments_t, calls_t, CallStatus
 from backend.utils import make_user_password_hash, check_user_password, SelectQuery
 
@@ -48,6 +50,22 @@ class CheckObjectsExistsMixin:
         ])
         if not await self.pg.fetchval(query):
             raise HTTPNotFound()
+
+
+class CheckUserPermissionMixin:
+    skip_methods: list = []
+    permissions_classes: list = []
+
+    async def _iter(self) -> StreamResponse:
+        if self.request.method not in self.skip_methods:
+            await self.check_permissions()
+        return await super()._iter()
+
+    async def check_permissions(self):
+        permissions_objects = [permission() for permission in self.permissions_classes]
+        for permission in permissions_objects:
+            if not permission.has_permission(self.request, self):
+                raise HTTPForbidden(reason='You do not have permission to perform this action.')
 
 
 class LoginAPIView(BaseView):
@@ -145,13 +163,15 @@ class UsersListAPIView(BaseView):
         return Response(body=body, status=HTTPStatus.OK)
 
 
-class UserRetrieveUpdateDestroyAPIView(CheckObjectsExistsMixin, BaseView):
+class UserRetrieveUpdateDestroyAPIView(CheckObjectsExistsMixin, CheckUserPermissionMixin, BaseView):
     """
     Returns, changes or delete information for a user.
     """
     URL_PATH = r'/api/v1/users/{user_id:\d+}/'
     object_id_path = 'user_id'
     check_exists_table = users_t
+    skip_methods = [hdrs.METH_GET]
+    permissions_classes = [IsAuthenticatedForObject]
 
     async def get_user(self):
         user_query = queries.MAIN_USER_QUERY.where(users_t.c.id == self.object_id)
@@ -202,13 +222,14 @@ class UserRetrieveUpdateDestroyAPIView(CheckObjectsExistsMixin, BaseView):
         return Response(body={}, status=HTTPStatus.NO_CONTENT)
 
 
-class BillRetrieveUpdateAPIView(CheckObjectsExistsMixin, BaseView):
+class BillRetrieveUpdateAPIView(CheckObjectsExistsMixin, CheckUserPermissionMixin, BaseView):
     """
     Returns or changes bill information for a user.
     """
     URL_PATH = r'/api/v1/bills/{user_id:\d+}/'
     object_id_path = 'user_id'
     check_exists_table = users_t
+    permissions_classes = [IsAuthenticatedForObject]
 
     async def get_bill(self):
         bill_query = bills_t.select(bills_t.c.user_id == self.object_id)
@@ -292,13 +313,14 @@ class PaymentCreateAPIView(BaseView):
         return Response(body={'data': new_payment}, status=HTTPStatus.CREATED)
 
 
-class PaymentsListAPIView(CheckObjectsExistsMixin, BaseView):
+class PaymentsListAPIView(CheckObjectsExistsMixin, CheckUserPermissionMixin, BaseView):
     """
     Returns payments information for user bill.
     """
-    URL_PATH = r'/api/v1/payments/{bill_id:\d+}/list/'
-    object_id_path = 'bill_id'
-    check_exists_table = bills_t
+    URL_PATH = r'/api/v1/payments/{user_id:\d+}/list/'
+    object_id_path = 'user_id'
+    check_exists_table = users_t
+    permissions_classes = [IsAuthenticatedForObject]
 
     @docs(tags=['bills'],
           summary='List of payments',
@@ -306,7 +328,7 @@ class PaymentsListAPIView(CheckObjectsExistsMixin, BaseView):
           security=jwt_security)
     @response_schema(schema.PaymentListResponseSchema(), code=HTTPStatus.OK.value)
     async def get(self):
-        payments_query = payments_t.select(payments_t.c.bill_id == self.object_id)
+        payments_query = payments_t.select(bills_t.c.user_id == self.object_id).select_from(payments_t.join(bills_t))
         body = SelectQuery(query=payments_query, transaction_ctx=self.pg.transaction())
         return Response(body=body, status=HTTPStatus.OK)
 
@@ -371,13 +393,14 @@ class CallCreateAPIView(BaseView):
         return Response(body={'data': new_call}, status=HTTPStatus.CREATED)
 
 
-class CallsListAPIView(CheckObjectsExistsMixin, BaseView):
+class CallsListAPIView(CheckObjectsExistsMixin, CheckUserPermissionMixin, BaseView):
     """
     Returns information about calls for user.
     """
     URL_PATH = r'/api/v1/calls/{user_id:\d+}/list/'
     object_id_path = 'user_id'
     check_exists_table = users_t
+    permissions_classes = [IsAuthenticatedForObject]
 
     @property
     def correct_statuses(self):
