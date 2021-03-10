@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 from http import HTTPStatus
 
-import jwt
 from aiohttp import hdrs
 from aiohttp.web_exceptions import HTTPNotFound
 from aiohttp.web_response import Response

@@ -74,7 +74,7 @@ async def authorized_api_client(db_session, aiohttp_client, aiomisc_unused_port:
     user = UserFactory()
     db_session.commit()
     jwt_token = get_jwt_token_for_user(user_data={'id': user.id, 'email': user.email, 'username': user.username})
-    headers = {'Authorization' : f'Bearer {jwt_token}'}
+    headers = {'Authorization': f'Bearer {jwt_token}'}
 
     client = await aiohttp_client(app, server_kwargs={'port': aiomisc_unused_port}, headers=headers)
     try:
