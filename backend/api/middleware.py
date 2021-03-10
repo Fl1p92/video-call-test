@@ -54,7 +54,7 @@ async def error_middleware(request: Request, handler):
     except HTTPException as err:
         # Exceptions that are HTTP responses were deliberately thrown for display to the client.
         # Text exceptions (or exceptions without information) are formatted in JSON
-        if not isinstance(err.body, JsonPayload):
+        if not isinstance(err.text, JsonPayload):
             return format_http_error(err.text, err.status_code)
         raise
 

@@ -1,6 +1,7 @@
 import logging
+from functools import partial
 from types import AsyncGeneratorType, MappingProxyType
-from typing import AsyncIterable, Mapping
+from typing import AsyncIterable, Mapping, Optional
 
 from aiohttp import PAYLOAD_REGISTRY
 from aiohttp.web_app import Application
@@ -22,7 +23,7 @@ jwt_middleware = JWTMiddleware(secret_or_pub_key=settings.JWT_SECRET,
                                algorithms=["HS256"])
 
 
-def create_app() -> Application:
+def create_app(pg_url: Optional[str] = None) -> Application:
     """
     Creates an instance of the application, ready to run.
     """
@@ -31,7 +32,7 @@ def create_app() -> Application:
     )
 
     # Connect at start to postgres and disconnect at stop
-    app.cleanup_ctx.append(setup_pg)
+    app.cleanup_ctx.append(partial(setup_pg, pg_url=pg_url))
 
     # Attach socket.io signaling server
     sio.attach(app)

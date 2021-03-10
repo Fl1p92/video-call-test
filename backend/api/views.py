@@ -4,20 +4,20 @@ from http import HTTPStatus
 
 import jwt
 from aiohttp import hdrs
-from aiohttp.web_exceptions import HTTPNotFound, HTTPForbidden
-from aiohttp.web_response import Response, StreamResponse
+from aiohttp.web_exceptions import HTTPNotFound
+from aiohttp.web_response import Response
 from aiohttp.web_urldispatcher import View
 from aiohttp_apispec import docs, request_schema, response_schema
 from asyncpg import UniqueViolationError
 from asyncpgsa import PG
 from marshmallow import ValidationError
-from sqlalchemy import exists, select, or_, Table
+from sqlalchemy import exists, select, or_
 
 from backend import settings
-from backend.api import schema, queries
+from backend.api import schema, queries, mixins
 from backend.api.permissions import IsAuthenticatedForObject
 from backend.db.models import users_t, bills_t, payments_t, calls_t, CallStatus
-from backend.utils import make_user_password_hash, check_user_password, SelectQuery
+from backend.utils import make_user_password_hash, check_user_password, SelectQuery, get_jwt_token_for_user
 
 
 # swagger security schema
@@ -30,42 +30,6 @@ class BaseView(View):
     @property
     def pg(self) -> PG:
         return self.request.app['pg']
-
-
-class CheckObjectsExistsMixin:
-    object_id_path: str
-    check_exists_table: Table
-
-    async def _iter(self) -> StreamResponse:
-        await self.check_object_exists()
-        return await super()._iter()
-
-    @property
-    def object_id(self):
-        return int(self.request.match_info.get(self.object_id_path))
-
-    async def check_object_exists(self):
-        query = select([
-            exists().where(self.check_exists_table.c.id == self.object_id)
-        ])
-        if not await self.pg.fetchval(query):
-            raise HTTPNotFound()
-
-
-class CheckUserPermissionMixin:
-    skip_methods: list = []
-    permissions_classes: list = []
-
-    async def _iter(self) -> StreamResponse:
-        if self.request.method not in self.skip_methods:
-            await self.check_permissions()
-        return await super()._iter()
-
-    async def check_permissions(self):
-        permissions_objects = [permission() for permission in self.permissions_classes]
-        for permission in permissions_objects:
-            if not permission.has_permission(self.request, self):
-                raise HTTPForbidden(reason='You do not have permission to perform this action.')
 
 
 class LoginAPIView(BaseView):
@@ -86,16 +50,14 @@ class LoginAPIView(BaseView):
         user = await self.pg.fetchrow(get_user_query)
         if user is not None:
             if check_user_password(validated_data['password'], user['password']):
-                payload_data = {
-                    'id': user['id'],
-                    'email': user['email'],
-                    'username': user['username'],
-                    'exp': datetime.utcnow() + settings.JWT_EXPIRATION_DELTA
-                }
-                token = jwt.encode(payload=payload_data, key=settings.JWT_SECRET)
+                token = get_jwt_token_for_user(user)
                 response_data = {
                     'token': f'Bearer {token}',
-                    'user': {k: v for k, v in payload_data.items() if k != 'exp'}
+                    'user': {
+                        'id': user['id'],
+                        'email': user['email'],
+                        'username': user['username'],
+                    }
                 }
                 return Response(body={'data': response_data}, status=HTTPStatus.OK)
         raise ValidationError({'non_field_errors': ['Unable to log in with provided credentials.']})
@@ -163,7 +125,9 @@ class UsersListAPIView(BaseView):
         return Response(body=body, status=HTTPStatus.OK)
 
 
-class UserRetrieveUpdateDestroyAPIView(CheckObjectsExistsMixin, CheckUserPermissionMixin, BaseView):
+class UserRetrieveUpdateDestroyAPIView(mixins.CheckObjectsExistsMixin,
+                                       mixins.CheckUserPermissionMixin,
+                                       BaseView):
     """
     Returns, changes or delete information for a user.
     """
@@ -222,7 +186,9 @@ class UserRetrieveUpdateDestroyAPIView(CheckObjectsExistsMixin, CheckUserPermiss
         return Response(body={}, status=HTTPStatus.NO_CONTENT)
 
 
-class BillRetrieveUpdateAPIView(CheckObjectsExistsMixin, CheckUserPermissionMixin, BaseView):
+class BillRetrieveUpdateAPIView(mixins.CheckObjectsExistsMixin,
+                                mixins.CheckUserPermissionMixin,
+                                BaseView):
     """
     Returns or changes bill information for a user.
     """
@@ -313,7 +279,9 @@ class PaymentCreateAPIView(BaseView):
         return Response(body={'data': new_payment}, status=HTTPStatus.CREATED)
 
 
-class PaymentsListAPIView(CheckObjectsExistsMixin, CheckUserPermissionMixin, BaseView):
+class PaymentsListAPIView(mixins.CheckObjectsExistsMixin,
+                          mixins.CheckUserPermissionMixin,
+                          BaseView):
     """
     Returns payments information for user bill.
     """
@@ -393,7 +361,9 @@ class CallCreateAPIView(BaseView):
         return Response(body={'data': new_call}, status=HTTPStatus.CREATED)
 
 
-class CallsListAPIView(CheckObjectsExistsMixin, CheckUserPermissionMixin, BaseView):
+class CallsListAPIView(mixins.CheckObjectsExistsMixin,
+                       mixins.CheckUserPermissionMixin,
+                       BaseView):
     """
     Returns information about calls for user.
     """

@@ -5,8 +5,8 @@ from backend.db.models import CallStatus
 
 
 class BaseSchema(Schema):
-    id = fields.Int(validate=Range(min=0), strict=True, dump_only=True)
-    created = fields.DateTime(format='iso', dump_only=True)
+    id = fields.Int(validate=Range(min=0), strict=True)
+    created = fields.DateTime(format='iso')
 
 
 class CallSchema(BaseSchema):

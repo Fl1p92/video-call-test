@@ -45,7 +45,6 @@ class Base:
     def __tablename__(cls):
         return f"{cls.__name__.lower()}s"
 
-    @declared_attr
     def __repr__(self):
         return f"[{self.id}] {self.__class__.__name__}"
 
@@ -62,6 +61,7 @@ class Bill(Base):
     user = relationship('User', back_populates='bill')
     balance = Column(Numeric, nullable=False)
     tariff = Column(Numeric, nullable=False)
+    payments = relationship('Payment', back_populates='bill')
 
 
 class Payment(Base):
@@ -72,7 +72,9 @@ class Payment(Base):
 
 class Call(Base):
     caller_id = Column(Integer, ForeignKey('users.id', onupdate='CASCADE', ondelete='CASCADE'))
+    caller = relationship('User', foreign_keys=[caller_id])
     callee_id = Column(Integer, ForeignKey('users.id', onupdate='CASCADE', ondelete='CASCADE'))
+    callee = relationship('User', foreign_keys=[callee_id])
     duration = Column(Interval)
     status = Column(EnumCol(CallStatus, name='call_status'), nullable=False)
 

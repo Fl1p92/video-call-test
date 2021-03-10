@@ -1,7 +1,13 @@
 import logging
-from collections import AsyncIterable
+from collections.abc import AsyncIterable
+from datetime import datetime
+from types import SimpleNamespace
+from typing import Optional
 
+import jwt
 from aiohttp.web_app import Application
+from aiohttp.web_urldispatcher import DynamicResource
+from alembic.config import Config
 from asyncpgsa import PG
 from asyncpgsa.transactionmanager import ConnectionTransactionContextManager
 from passlib.hash import sha256_crypt
@@ -13,11 +19,11 @@ from backend import settings
 log = logging.getLogger(__name__)
 
 
-async def setup_pg(app: Application) -> PG:
+async def setup_pg(app: Application, pg_url: Optional[str] = None) -> PG:
     log.info(f'Connecting to database: {settings.DB_INFO}')
 
     app['pg'] = PG()
-    await app['pg'].init(settings.DB_URL)
+    await app['pg'].init(pg_url or settings.DB_URL)
     await app['pg'].fetchval('SELECT 1')
     log.info(f'Connected to database: {settings.DB_INFO}')
 
@@ -42,6 +48,42 @@ def check_user_password(raw_password: str, hashed_password: str) -> bool:
     Return a boolean of whether the raw_password was correct.
     """
     return sha256_crypt.verify(raw_password, hashed_password)
+
+
+def get_jwt_token_for_user(user_data: dict) -> str:
+    """
+    Return a jwt token for a given user_data.
+    """
+    payload_data = {
+        'id': user_data['id'],
+        'email': user_data['email'],
+        'username': user_data['username'],
+        'exp': datetime.utcnow() + settings.JWT_EXPIRATION_DELTA
+    }
+    token = jwt.encode(payload=payload_data, key=settings.JWT_SECRET)
+    return token
+
+
+def make_alembic_config(cmd_opts: SimpleNamespace) -> Config:
+    """
+    Creates alembic configuration object.
+    """
+    config = Config(file_=cmd_opts.config, ini_section=cmd_opts.name, cmd_opts=cmd_opts)
+    config.set_main_option('script_location', 'db/alembic')
+    if cmd_opts.pg_url:
+        config.set_main_option('sqlalchemy.url', cmd_opts.pg_url)
+    return config
+
+
+def url_for(path: str, **kwargs) -> str:
+    """
+    Generates URL for dynamic aiohttp route with included.
+    """
+    kwargs = {
+        key: str(value)  # All values must be str (for DynamicResource)
+        for key, value in kwargs.items()
+    }
+    return str(DynamicResource(path).url_for(**kwargs))
 
 
 class SelectQuery(AsyncIterable):
