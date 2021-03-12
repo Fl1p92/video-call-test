@@ -73,7 +73,7 @@ async def authorized_api_client(db_session, aiohttp_client, aiomisc_unused_port:
     app = create_app(pg_url=postgres_url)
     user = UserFactory()
     db_session.commit()
-    jwt_token = get_jwt_token_for_user(user_data={'id': user.id, 'email': user.email, 'username': user.username})
+    jwt_token = get_jwt_token_for_user(user=user)
     headers = {'Authorization': f'Bearer {jwt_token}'}
 
     client = await aiohttp_client(app, server_kwargs={'port': aiomisc_unused_port}, headers=headers)

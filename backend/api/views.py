@@ -49,14 +49,10 @@ class LoginAPIView(BaseView):
         user = await self.pg.fetchrow(get_user_query)
         if user is not None:
             if check_user_password(validated_data['password'], user['password']):
-                token = get_jwt_token_for_user(user)
+                token = get_jwt_token_for_user(user=user)
                 response_data = {
                     'token': f'Bearer {token}',
-                    'user': {
-                        'id': user['id'],
-                        'email': user['email'],
-                        'username': user['username'],
-                    }
+                    'user': schema.UserSchema(only=['id', 'email', 'username']).dump(user)
                 }
                 return Response(body={'data': response_data}, status=HTTPStatus.OK)
         raise ValidationError({'non_field_errors': ['Unable to log in with provided credentials.']})
@@ -239,20 +235,19 @@ class PaymentCreateAPIView(BaseView):
     """
     URL_PATH = '/api/v1/payments/create/'
 
-    async def check_bill_exists(self, bill_id):
+    async def check_bill_exists(self, bill_id, conn):
         query = select([
             exists().where(bills_t.c.id == bill_id)
         ])
-        if not await self.pg.fetchval(query):
+        if not await conn.fetchval(query):
             raise HTTPNotFound()
 
-    async def update_bill_balance(self, bill_id):
-        async with self.pg.transaction() as conn:
-            amount = self.request['validated_data'].get('amount')
-            # Blocking will avoid race conditions between concurrent bill change requests
-            await conn.fetch('SELECT pg_advisory_xact_lock($1)', bill_id)
-            query = bills_t.update().values(balance=bills_t.c.balance + amount).where(bills_t.c.id == bill_id)
-            await conn.fetch(query)
+    async def update_bill_balance(self, bill_id, conn):
+        amount = self.request['validated_data'].get('amount')
+        # Blocking will avoid race conditions between concurrent bill change requests
+        await conn.fetch('SELECT pg_advisory_xact_lock($1)', bill_id)
+        query = bills_t.update().values(balance=bills_t.c.balance + amount).where(bills_t.c.id == bill_id)
+        await conn.fetch(query)
 
     @docs(tags=['bills'],
           summary='Create payment',
@@ -266,14 +261,14 @@ class PaymentCreateAPIView(BaseView):
             bill_id = validated_data.get('bill_id')
 
             # Check bill id exists
-            await self.check_bill_exists(bill_id)
+            await self.check_bill_exists(bill_id, conn)
 
             # Create new payment
             insert_payment_query = payments_t.insert().returning(payments_t).values(validated_data)
             new_payment = await conn.fetchrow(insert_payment_query)
 
-        # Update bill balance by the amount of the new payment
-        await self.update_bill_balance(bill_id)
+            # Update bill balance by the amount of the new payment
+            await self.update_bill_balance(bill_id, conn)
 
         return Response(body={'data': new_payment}, status=HTTPStatus.CREATED)
 

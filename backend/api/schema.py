@@ -23,7 +23,7 @@ class PaymentSchema(BaseSchema):
 
 class BillSchema(BaseSchema):
     user_id = fields.Int(validate=Range(min=0), strict=True, required=True)
-    balance = fields.Decimal(places=2, dump_only=True)
+    balance = fields.Decimal(places=2)
     tariff = fields.Decimal(validate=Range(min=0, min_inclusive=False), places=2, required=True)
 
 
@@ -44,7 +44,7 @@ class JWTTokenSchema(Schema):
 
 
 class BillDetailsSchema(BillSchema):
-    max_call_duration_minutes = fields.Int(validate=Range(min=1), strict=True)
+    max_call_duration_minutes = fields.Int(strict=True)
 
 
 class UserDetailsResponseSchema(Schema):

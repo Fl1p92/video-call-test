@@ -2,18 +2,21 @@ import logging
 from collections.abc import AsyncIterable
 from datetime import datetime
 from types import SimpleNamespace
-from typing import Optional
+from typing import Optional, Union
 
 import jwt
 from aiohttp.web_app import Application
 from aiohttp.web_urldispatcher import DynamicResource
 from alembic.config import Config
+from asyncpg import Record
 from asyncpgsa import PG
 from asyncpgsa.transactionmanager import ConnectionTransactionContextManager
 from passlib.hash import sha256_crypt
 from sqlalchemy.sql import Select
 
 from backend import settings
+from backend.api.schema import UserSchema
+from backend.db.models import User
 
 
 log = logging.getLogger(__name__)
@@ -50,14 +53,16 @@ def check_user_password(raw_password: str, hashed_password: str) -> bool:
     return sha256_crypt.verify(raw_password, hashed_password)
 
 
-def get_jwt_token_for_user(user_data: dict) -> str:
+def get_jwt_token_for_user(user: Union[dict, Record, User]) -> str:
     """
     Return a jwt token for a given user_data.
     """
+    if isinstance(user, User):
+        user = UserSchema().dump(user)
     payload_data = {
-        'id': user_data['id'],
-        'email': user_data['email'],
-        'username': user_data['username'],
+        'id': user['id'],
+        'email': user['email'],
+        'username': user['username'],
         'exp': datetime.utcnow() + settings.JWT_EXPIRATION_DELTA
     }
     token = jwt.encode(payload=payload_data, key=settings.JWT_SECRET)
