@@ -1,10 +1,14 @@
+from datetime import timedelta
 from http import HTTPStatus
 
 from backend import settings
-from backend.db.factories import USER_TEST_PASSWORD, UserFactory, BillFactory, PaymentFactory
-from backend.db.models import User, Bill, Payment
+from backend.db.factories import USER_TEST_PASSWORD, UserFactory, BillFactory, PaymentFactory, CallFactory
+from backend.db.models import User, Bill, Payment, CallStatus, Call
 from backend.api import views, schema
 from backend.utils import url_for
+
+
+ADDITIONAL_OBJECTS_QUANTITY = 5
 
 
 async def test_create_user(authorized_api_client, db_session):
@@ -126,8 +130,7 @@ async def test_get_user_list(authorized_api_client, db_session):
     api_client, user = authorized_api_client
     # Creates users pool
     initial_users_quantity = db_session.query(User).count()
-    n = 5
-    for _ in range(n):
+    for _ in range(ADDITIONAL_OBJECTS_QUANTITY):
         UserFactory()
     db_session.commit()
 
@@ -140,7 +143,7 @@ async def test_get_user_list(authorized_api_client, db_session):
     response_data = await response.json()
     errors = schema.UserListResponseSchema().validate(response_data)
     assert not errors
-    assert len(response_data['data']) == initial_users_quantity + n
+    assert len(response_data['data']) == initial_users_quantity + ADDITIONAL_OBJECTS_QUANTITY
 
     # Filter by username
     response = await api_client.get(url_for(views.UsersListAPIView.URL_PATH), params={'search': user.username})
@@ -417,8 +420,7 @@ async def test_get_payment_list(authorized_api_client, db_session):
     user_bill = BillFactory(user=user)
     other_user = UserFactory()
     # Creates payments pool
-    n = 5
-    for _ in range(n):
+    for _ in range(ADDITIONAL_OBJECTS_QUANTITY):
         PaymentFactory(bill=user_bill)
     db_session.commit()
 
@@ -431,7 +433,7 @@ async def test_get_payment_list(authorized_api_client, db_session):
     response_data = await response.json()
     errors = schema.PaymentListResponseSchema().validate(response_data)
     assert not errors
-    assert len(response_data['data']) == n
+    assert len(response_data['data']) == ADDITIONAL_OBJECTS_QUANTITY
 
     # Attempt to retrieve payments list for other_user
     response = await api_client.get(url_for(views.PaymentsListAPIView.URL_PATH, user_id=other_user.id))
@@ -446,6 +448,194 @@ async def test_get_payment_list(authorized_api_client, db_session):
     # Attempt to retrieve payments list for not exists user
     last_id = db_session.query(User).order_by(User.id.desc()).first().id
     response = await api_client.get(url_for(views.PaymentsListAPIView.URL_PATH, user_id=last_id + 100))
+    # Response checks
+    assert response.status == HTTPStatus.NOT_FOUND
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    assert response_data['error']['code'] == 'not_found'
+    assert response_data['error']['message'] == '404: Not Found'
+
+
+async def test_create_call(authorized_api_client, db_session):
+    api_client, user = authorized_api_client
+    user_bill = BillFactory(user=user)
+    other_user = UserFactory()
+    db_session.commit()
+
+    # Try to create call without all required fields
+    partial_data = {
+        'duration': 10,
+    }
+    # Response checks
+    response = await api_client.post(url_for(views.CallCreateAPIView.URL_PATH), data=partial_data)
+    assert response.status == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    assert len(response_data['error']['fields'].keys()) == 3
+    assert response_data['error']['fields'].keys() == {'caller_id', 'callee_id', 'status'}
+
+    # Try to create call with invalid data
+    invalid_data = {
+        'caller_id': '123',
+        'callee_id': -123,
+        'status': 'invalid_status',
+    }
+    # Response checks
+    response = await api_client.post(url_for(views.CallCreateAPIView.URL_PATH), data=invalid_data)
+    assert response.status == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    assert len(response_data['error']['fields'].keys()) == 3
+    assert response_data['error']['fields']['caller_id'][0] == 'Not a valid integer.'
+    assert response_data['error']['fields']['callee_id'][0] == 'Must be greater than or equal to 0.'
+    assert response_data['error']['fields']['status'][0] == 'Must be one of: successful, missed, declined.'
+
+    # Try to create call with invalid callee_id
+    last_id = db_session.query(User).order_by(User.id.desc()).first().id
+    invalid_user_id_data = {
+        'caller_id': user.id,
+        'callee_id': last_id + 100,
+        'duration': 10,
+        'status': CallStatus.successful.name,
+    }
+    # Response checks
+    response = await api_client.post(url_for(views.CallCreateAPIView.URL_PATH), data=invalid_user_id_data)
+    assert response.status == HTTPStatus.NOT_FOUND
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    assert response_data['error']['code'] == 'not_found'
+    assert response_data['error']['message'] == '404: Not Found'
+
+    # Try to create call with same callee_id as caller_id
+    same_user_id_data = {
+        'caller_id': user.id,
+        'callee_id': user.id,
+        'duration': 10,
+        'status': CallStatus.successful.name,
+    }
+    # Response checks
+    response = await api_client.post(url_for(views.CallCreateAPIView.URL_PATH), data=same_user_id_data)
+    assert response.status == HTTPStatus.BAD_REQUEST
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    assert response_data['error']['fields']['non_field_errors'][0] == f'User {user.id} cannot call himself.'
+
+    # Try to create call without money on the bill
+    max_call_duration_minutes = user_bill.balance // user_bill.tariff
+    valid_call_data = {
+        'caller_id': user.id,
+        'callee_id': other_user.id,
+        'duration': int(max_call_duration_minutes * 60 + 1),  # max minutes + 1 sec
+        'status': CallStatus.successful.name,
+    }
+    # Response checks
+    response = await api_client.post(url_for(views.CallCreateAPIView.URL_PATH), data=valid_call_data)
+    assert response.status == HTTPStatus.BAD_REQUEST
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    assert response_data['error']['fields']['non_field_errors'][0] == f'User {user.id} doesn\'t ' \
+                                                                      f'have enough money to call.'
+
+    # Creates a new call
+    # Update the user's balance so that he had enough money for a call
+    duration_in_min = 5
+    old_balance = user_bill.balance
+    db_session.query(Bill).filter(Bill.id == user_bill.id) \
+        .update({Bill.balance: Bill.balance + duration_in_min * user_bill.tariff})
+    db_session.commit()
+    # Check updated balance
+    assert user_bill.balance == old_balance + duration_in_min * user_bill.tariff
+
+    valid_call_data = {
+        'caller_id': user.id,
+        'callee_id': other_user.id,
+        'duration': duration_in_min * 60,
+        'status': CallStatus.successful.name,
+    }
+    assert db_session.query(Call).filter(Call.caller_id == valid_call_data['caller_id'],
+                                         Call.callee_id == valid_call_data['callee_id']).count() == 0
+    # Response checks
+    response = await api_client.post(url_for(views.CallCreateAPIView.URL_PATH), data=valid_call_data)
+    assert response.status == HTTPStatus.CREATED
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    errors = schema.CallDetailsResponseSchema().validate(response_data)
+    assert not errors
+    assert response_data['data']['caller_id'] == valid_call_data['caller_id']
+    assert response_data['data']['callee_id'] == valid_call_data['callee_id']
+    assert response_data['data']['duration'] == valid_call_data['duration']
+    assert response_data['data']['status'] == valid_call_data['status']
+    # DB checks
+    assert db_session.query(Call).filter(Call.caller_id == valid_call_data['caller_id'],
+                                         Call.callee_id == valid_call_data['callee_id']).count() == 1
+    call_from_db = db_session.query(Call).filter(Call.caller_id == valid_call_data['caller_id'],
+                                                 Call.callee_id == valid_call_data['callee_id']).first()
+    assert call_from_db.caller_id == valid_call_data['caller_id']
+    assert call_from_db.callee_id == valid_call_data['callee_id']
+    assert call_from_db.duration == timedelta(seconds=valid_call_data['duration'])
+    assert call_from_db.status == CallStatus.successful
+    # Bill balance updates check
+    db_session.refresh(user_bill)  # get updates from db
+    assert user_bill.balance == old_balance
+
+
+async def test_get_call_list(authorized_api_client, db_session):
+    api_client, user = authorized_api_client
+    other_user = CallFactory().caller
+    # Creates calls pool
+    for _ in range(ADDITIONAL_OBJECTS_QUANTITY):
+        CallFactory(caller=user, callee=other_user)
+    db_session.commit()
+
+    # Get all calls for user
+    response = await api_client.get(url_for(views.CallsListAPIView.URL_PATH, user_id=user.id))
+    # Response checks
+    assert response.status == HTTPStatus.OK
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    errors = schema.CallListResponseSchema().validate(response_data)
+    assert not errors
+    assert len(response_data['data']) == ADDITIONAL_OBJECTS_QUANTITY
+
+    # Filter by call status
+    call_count_from_db = db_session.query(Call) \
+        .filter(Call.caller_id == user.id,
+                Call.callee_id == other_user.id,
+                Call.status == CallStatus.successful) \
+        .count()
+    response = await api_client.get(url_for(views.CallsListAPIView.URL_PATH, user_id=user.id),
+                                    params={'status': CallStatus.successful.name})
+    # Response checks
+    assert response.status == HTTPStatus.OK
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    errors = schema.CallListResponseSchema().validate(response_data)
+    assert not errors
+    assert len(response_data['data']) == call_count_from_db
+    assert response_data['data'][0]['status'] == CallStatus.successful.name
+
+    # Attempt to retrieve calls list for other_user
+    response = await api_client.get(url_for(views.CallsListAPIView.URL_PATH, user_id=other_user.id))
+    # Response checks
+    assert response.status == HTTPStatus.FORBIDDEN
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    assert response_data['error']['code'] == 'forbidden'
+    assert response_data['error']['message'] == '403: You do not have permission to perform this action.'
+
+    # Attempt to retrieve calls list for not exists user
+    last_id = db_session.query(User).order_by(User.id.desc()).first().id
+    response = await api_client.get(url_for(views.CallsListAPIView.URL_PATH, user_id=last_id + 100))
     # Response checks
     assert response.status == HTTPStatus.NOT_FOUND
     assert response.content_type == 'application/json'

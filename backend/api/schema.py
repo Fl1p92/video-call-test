@@ -13,7 +13,7 @@ class CallSchema(BaseSchema):
     caller_id = fields.Int(validate=Range(min=0), strict=True, required=True)
     callee_id = fields.Int(validate=Range(min=0), strict=True, required=True)
     duration = fields.Int(validate=Range(min=0), strict=True)
-    status = fields.Str(validate=OneOf([status.name for status in CallStatus]))
+    status = fields.Str(validate=OneOf([status.name for status in CallStatus]), required=True)
 
 
 class PaymentSchema(BaseSchema):

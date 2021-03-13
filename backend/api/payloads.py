@@ -37,7 +37,7 @@ def convert_datetime(value: datetime):
 
 @convert.register(timedelta)
 def convert_timedelta(value: timedelta):
-    return value.total_seconds()
+    return int(value.total_seconds())
 
 
 @convert.register(Decimal)

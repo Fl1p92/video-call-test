@@ -382,7 +382,7 @@ class CallsListAPIView(mixins.CheckObjectsExistsMixin,
     @response_schema(schema.CallListResponseSchema(), code=HTTPStatus.OK.value)
     async def get(self):
         calls_query = calls_t.select(or_(calls_t.c.caller_id == self.object_id, calls_t.c.callee_id == self.object_id))
-        if (filter_term := self.request.query.get('type')) and (filter_term in self.correct_statuses):
+        if (filter_term := self.request.query.get('status')) and (filter_term in self.correct_statuses):
             calls_query = calls_query.where(calls_t.c.status == filter_term)
         body = SelectQuery(query=calls_query, transaction_ctx=self.pg.transaction())
         return Response(body=body, status=HTTPStatus.OK)
