@@ -19,7 +19,7 @@ from backend.utils import setup_pg
 log = logging.getLogger(__name__)
 docs_path = '/api/v1/docs/'
 jwt_middleware = JWTMiddleware(secret_or_pub_key=settings.JWT_SECRET,
-                               whitelist=(f'{docs_path}.*', ) + JWT_WHITE_LIST,
+                               whitelist=(f'{docs_path}.*', r'/socket\.io/.*') + JWT_WHITE_LIST,
                                algorithms=["HS256"])
 
 

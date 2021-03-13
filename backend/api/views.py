@@ -253,7 +253,7 @@ class PaymentCreateAPIView(BaseView):
           summary='Create payment',
           description='Creates new payment for a user',
           security=jwt_security)
-    @request_schema(schema.PaymentSchema())
+    @request_schema(schema.PaymentSchema(exclude=('id', 'created')))
     @response_schema(schema.PaymentDetailsResponseSchema(), code=HTTPStatus.CREATED.value)
     async def post(self):
         async with self.pg.transaction() as conn:
@@ -330,12 +330,14 @@ class CallCreateAPIView(BaseView):
           summary='Create call',
           description='Creates new call for a user',
           security=jwt_security)
-    @request_schema(schema.CallSchema())
+    @request_schema(schema.CallSchema(exclude=('id', 'created')))
     @response_schema(schema.CallDetailsResponseSchema(), code=HTTPStatus.CREATED.value)
     async def post(self):
         async with self.pg.transaction() as conn:
             validated_data = self.request['validated_data']
-            validated_data['duration'] = timedelta(seconds=validated_data['duration'])
+            call_duration = validated_data.get('duration')
+            if call_duration is not None:
+                validated_data['duration'] = timedelta(seconds=call_duration)
 
             # Check users availability
             await self.check_users_exists(caller_id=validated_data.get('caller_id'),
@@ -343,14 +345,16 @@ class CallCreateAPIView(BaseView):
                                           conn=conn)
 
             # Check user balance
-            user_bill = await self.check_user_balance(caller_id=validated_data.get('caller_id'), conn=conn)
+            if call_duration is not None:
+                user_bill = await self.check_user_balance(caller_id=validated_data.get('caller_id'), conn=conn)
 
             # Create new call
             insert_call_query = calls_t.insert().returning(calls_t).values(validated_data)
             new_call = await conn.fetchrow(insert_call_query)
 
             # Update user balance
-            await self.update_user_balance(caller_bill=user_bill, conn=conn)
+            if call_duration is not None:
+                await self.update_user_balance(caller_bill=user_bill, conn=conn)
 
         return Response(body={'data': new_call}, status=HTTPStatus.CREATED)
 
@@ -376,7 +380,7 @@ class CallsListAPIView(mixins.CheckObjectsExistsMixin,
           security=jwt_security,
           parameters=[{
               'in': 'query',
-              'name': 'type',
+              'name': 'status',
               'description': 'Filter calls by call status'
           }])
     @response_schema(schema.CallListResponseSchema(), code=HTTPStatus.OK.value)

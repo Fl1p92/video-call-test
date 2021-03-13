@@ -9,33 +9,11 @@ class BaseSchema(Schema):
     created = fields.DateTime(format='iso')
 
 
-class CallSchema(BaseSchema):
-    caller_id = fields.Int(validate=Range(min=0), strict=True, required=True)
-    callee_id = fields.Int(validate=Range(min=0), strict=True, required=True)
-    duration = fields.Int(validate=Range(min=0), strict=True)
-    status = fields.Str(validate=OneOf([status.name for status in CallStatus]), required=True)
-
-
-class PaymentSchema(BaseSchema):
-    bill_id = fields.Int(validate=Range(min=0), strict=True, required=True)
-    amount = fields.Decimal(validate=Range(min=0, min_inclusive=False), places=2, required=True)
-
-
-class BillSchema(BaseSchema):
-    user_id = fields.Int(validate=Range(min=0), strict=True, required=True)
-    balance = fields.Decimal(places=2)
-    tariff = fields.Decimal(validate=Range(min=0, min_inclusive=False), places=2, required=True)
-
-
+# Users schemas
 class UserSchema(BaseSchema):
     email = fields.Email(required=True)
     username = fields.Str(required=True, validate=Length(min=1, max=256))
     password = fields.Str(required=True, validate=Length(min=7), load_only=True)
-
-
-class UserPatchSchema(BaseSchema):
-    email = fields.Email()
-    username = fields.Str(validate=Length(min=1, max=256))
 
 
 class JWTTokenSchema(Schema):
@@ -43,10 +21,36 @@ class JWTTokenSchema(Schema):
     user = fields.Nested(UserSchema(only=('id', 'email', 'username')))
 
 
+class UserPatchSchema(Schema):
+    email = fields.Email()
+    username = fields.Str(validate=Length(min=1, max=256))
+
+
+# Bills schemas
+class BillSchema(BaseSchema):
+    user_id = fields.Int(validate=Range(min=0), strict=True, required=True)
+    balance = fields.Decimal(places=2)
+    tariff = fields.Decimal(validate=Range(min=0, min_inclusive=False), places=2, required=True)
+
+
 class BillDetailsSchema(BillSchema):
     max_call_duration_minutes = fields.Int(strict=True)
 
 
+class PaymentSchema(BaseSchema):
+    bill_id = fields.Int(validate=Range(min=0), strict=True, required=True)
+    amount = fields.Decimal(validate=Range(min=0, min_inclusive=False), places=2, required=True)
+
+
+# Calls schemas
+class CallSchema(BaseSchema):
+    caller_id = fields.Int(validate=Range(min=0), strict=True, required=True)
+    callee_id = fields.Int(validate=Range(min=0), strict=True, required=True)
+    duration = fields.Int(validate=Range(min=0), strict=True, allow_none=True)
+    status = fields.Str(validate=OneOf([status.name for status in CallStatus]), required=True)
+
+
+# Responses schemas
 class UserDetailsResponseSchema(Schema):
     data = fields.Nested(UserSchema(exclude=('password', )), required=True)
 

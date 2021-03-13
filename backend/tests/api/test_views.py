@@ -576,6 +576,34 @@ async def test_create_call(authorized_api_client, db_session):
     db_session.refresh(user_bill)  # get updates from db
     assert user_bill.balance == old_balance
 
+    # Create a `missed` call
+    missed_call_data = {
+        'caller_id': user.id,
+        'callee_id': other_user.id,
+        'status': CallStatus.missed.name,
+    }
+    user_balance = db_session.query(Bill).filter(Bill.id == user_bill.id).first().balance
+    user_calls = db_session.query(Call).filter(Call.caller_id == missed_call_data['caller_id'],
+                                               Call.callee_id == missed_call_data['callee_id']).count()
+
+    # Response checks
+    response = await api_client.post(url_for(views.CallCreateAPIView.URL_PATH), data=missed_call_data)
+    assert response.status == HTTPStatus.CREATED
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    errors = schema.CallDetailsResponseSchema().validate(response_data)
+    assert not errors
+    assert response_data['data']['caller_id'] == missed_call_data['caller_id']
+    assert response_data['data']['callee_id'] == missed_call_data['callee_id']
+    assert response_data['data']['status'] == missed_call_data['status']
+    # DB checks
+    assert db_session.query(Call).filter(Call.caller_id == missed_call_data['caller_id'],
+                                         Call.callee_id == missed_call_data['callee_id']).count() == user_calls + 1
+    # Bill balance updates check
+    db_session.refresh(user_bill)  # get updates from db
+    assert user_bill.balance == user_balance
+
 
 async def test_get_call_list(authorized_api_client, db_session):
     api_client, user = authorized_api_client
