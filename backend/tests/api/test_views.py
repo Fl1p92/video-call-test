@@ -1,6 +1,8 @@
 from datetime import timedelta
 from http import HTTPStatus
 
+from aiohttp import ClientResponse
+
 from backend import settings
 from backend.db.factories import USER_TEST_PASSWORD, UserFactory, BillFactory, PaymentFactory, CallFactory
 from backend.db.models import User, Bill, Payment, CallStatus, Call
@@ -9,6 +11,26 @@ from backend.utils import url_for
 
 
 ADDITIONAL_OBJECTS_QUANTITY = 5
+
+
+async def check_response_for_objects_exists(response: ClientResponse):
+    # Response checks
+    assert response.status == HTTPStatus.NOT_FOUND
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    assert response_data['error']['code'] == 'not_found'
+    assert response_data['error']['message'] == '404: Not Found'
+
+
+async def check_response_for_authorized_user_permissions(response: ClientResponse):
+    # Response checks
+    assert response.status == HTTPStatus.FORBIDDEN
+    assert response.content_type == 'application/json'
+    # Response data checks
+    response_data = await response.json()
+    assert response_data['error']['code'] == 'forbidden'
+    assert response_data['error']['message'] == '403: You do not have permission to perform this action.'
 
 
 async def test_create_user(authorized_api_client, db_session):
@@ -195,13 +217,7 @@ async def test_retrieve_update_destroy_user(authorized_api_client, db_session):
     # Get info about not exists user
     last_id = db_session.query(User).order_by(User.id.desc()).first().id
     response = await api_client.get(url_for(views.UserRetrieveUpdateDestroyAPIView.URL_PATH, user_id=last_id + 100))
-    # Response checks
-    assert response.status == HTTPStatus.NOT_FOUND
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'not_found'
-    assert response_data['error']['message'] == '404: Not Found'
+    await check_response_for_objects_exists(response)
 
     # # Patch methods
     # Attempt to update authorized user info with not unique username
@@ -235,32 +251,30 @@ async def test_retrieve_update_destroy_user(authorized_api_client, db_session):
     db_session.refresh(user)  # get updates from db
     assert db_session.query(User).filter(User.id == user.id).first().username == new_username
 
+    # Attempt to update not exists user
+    last_id = db_session.query(User).order_by(User.id.desc()).first().id
+    response = await api_client.patch(url_for(views.UserRetrieveUpdateDestroyAPIView.URL_PATH, user_id=last_id + 100))
+    await check_response_for_objects_exists(response)
+
     # Attempt to update other_user with authorized user
     old_username = other_user.username
     invalid_patch_data = {'username': other_user.username + '_patched'}
     response = await api_client.patch(url_for(views.UserRetrieveUpdateDestroyAPIView.URL_PATH, user_id=other_user.id),
                                       data=invalid_patch_data)
-    # Response checks
-    assert response.status == HTTPStatus.FORBIDDEN
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'forbidden'
-    assert response_data['error']['message'] == '403: You do not have permission to perform this action.'
+    await check_response_for_authorized_user_permissions(response)
     # DB check
     db_session.refresh(other_user)  # get updates from db
     assert db_session.query(User).filter(User.id == other_user.id).first().username == old_username
 
     # # Delete methods
+    # Attempt to delete not exists user
+    last_id = db_session.query(User).order_by(User.id.desc()).first().id
+    response = await api_client.delete(url_for(views.UserRetrieveUpdateDestroyAPIView.URL_PATH, user_id=last_id + 100))
+    await check_response_for_objects_exists(response)
+
     # Attempt to delete other_user with authorized user
     response = await api_client.delete(url_for(views.UserRetrieveUpdateDestroyAPIView.URL_PATH, user_id=other_user.id))
-    # Response checks
-    assert response.status == HTTPStatus.FORBIDDEN
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'forbidden'
-    assert response_data['error']['message'] == '403: You do not have permission to perform this action.'
+    await check_response_for_authorized_user_permissions(response)
     # DB check
     db_session.refresh(other_user)  # get updates from db
     assert db_session.query(User).filter(User.id == other_user.id).count() == 1
@@ -300,24 +314,12 @@ async def test_retrieve_update_bill(authorized_api_client, db_session):
 
     # Attempt to retrieve bill info for other_user
     response = await api_client.get(url_for(views.BillRetrieveUpdateAPIView.URL_PATH, user_id=other_user.id))
-    # Response checks
-    assert response.status == HTTPStatus.FORBIDDEN
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'forbidden'
-    assert response_data['error']['message'] == '403: You do not have permission to perform this action.'
+    await check_response_for_authorized_user_permissions(response)
 
-    # Get bill info about not exists user
+    # Attempt to get bill info about not exists user
     last_id = db_session.query(User).order_by(User.id.desc()).first().id
     response = await api_client.get(url_for(views.BillRetrieveUpdateAPIView.URL_PATH, user_id=last_id + 100))
-    # Response checks
-    assert response.status == HTTPStatus.NOT_FOUND
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'not_found'
-    assert response_data['error']['message'] == '404: Not Found'
+    await check_response_for_objects_exists(response)
 
     # # Patch methods
     # Update authorized user bill info
@@ -339,6 +341,17 @@ async def test_retrieve_update_bill(authorized_api_client, db_session):
     # DB check
     db_session.refresh(user_bill)  # get updates from db
     assert db_session.query(Bill).filter(Bill.user_id == user.id).first().tariff == new_tariff
+
+    # Attempt to update bill info for other_user
+    response = await api_client.patch(url_for(views.BillRetrieveUpdateAPIView.URL_PATH, user_id=other_user.id),
+                                      data=patch_data)
+    await check_response_for_authorized_user_permissions(response)
+
+    # Attempt to update bill info about not exists user
+    last_id = db_session.query(User).order_by(User.id.desc()).first().id
+    response = await api_client.patch(url_for(views.BillRetrieveUpdateAPIView.URL_PATH, user_id=last_id + 100),
+                                      data=patch_data)
+    await check_response_for_objects_exists(response)
 
 
 async def test_create_payment(authorized_api_client, db_session):
@@ -382,12 +395,7 @@ async def test_create_payment(authorized_api_client, db_session):
     }
     # Response checks
     response = await api_client.post(url_for(views.PaymentCreateAPIView.URL_PATH), data=invalid_bill_id_data)
-    assert response.status == HTTPStatus.NOT_FOUND
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'not_found'
-    assert response_data['error']['message'] == '404: Not Found'
+    await check_response_for_objects_exists(response)
 
     # Creates a new payment
     old_balance = user_bill.balance
@@ -437,24 +445,12 @@ async def test_get_payment_list(authorized_api_client, db_session):
 
     # Attempt to retrieve payments list for other_user
     response = await api_client.get(url_for(views.PaymentsListAPIView.URL_PATH, user_id=other_user.id))
-    # Response checks
-    assert response.status == HTTPStatus.FORBIDDEN
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'forbidden'
-    assert response_data['error']['message'] == '403: You do not have permission to perform this action.'
+    await check_response_for_authorized_user_permissions(response)
 
     # Attempt to retrieve payments list for not exists user
     last_id = db_session.query(User).order_by(User.id.desc()).first().id
     response = await api_client.get(url_for(views.PaymentsListAPIView.URL_PATH, user_id=last_id + 100))
-    # Response checks
-    assert response.status == HTTPStatus.NOT_FOUND
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'not_found'
-    assert response_data['error']['message'] == '404: Not Found'
+    await check_response_for_objects_exists(response)
 
 
 async def test_create_call(authorized_api_client, db_session):
@@ -503,12 +499,7 @@ async def test_create_call(authorized_api_client, db_session):
     }
     # Response checks
     response = await api_client.post(url_for(views.CallCreateAPIView.URL_PATH), data=invalid_user_id_data)
-    assert response.status == HTTPStatus.NOT_FOUND
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'not_found'
-    assert response_data['error']['message'] == '404: Not Found'
+    await check_response_for_objects_exists(response)
 
     # Try to create call with same callee_id as caller_id
     same_user_id_data = {
@@ -625,21 +616,9 @@ async def test_get_call_list(authorized_api_client, db_session):
 
     # Attempt to retrieve calls list for other_user
     response = await api_client.get(url_for(views.CallsListAPIView.URL_PATH, user_id=other_user.id))
-    # Response checks
-    assert response.status == HTTPStatus.FORBIDDEN
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'forbidden'
-    assert response_data['error']['message'] == '403: You do not have permission to perform this action.'
+    await check_response_for_authorized_user_permissions(response)
 
     # Attempt to retrieve calls list for not exists user
     last_id = db_session.query(User).order_by(User.id.desc()).first().id
     response = await api_client.get(url_for(views.CallsListAPIView.URL_PATH, user_id=last_id + 100))
-    # Response checks
-    assert response.status == HTTPStatus.NOT_FOUND
-    assert response.content_type == 'application/json'
-    # Response data checks
-    response_data = await response.json()
-    assert response_data['error']['code'] == 'not_found'
-    assert response_data['error']['message'] == '404: Not Found'
+    await check_response_for_objects_exists(response)
