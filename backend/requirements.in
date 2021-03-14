@@ -4,7 +4,6 @@ aiohttp_jwt
 aiomisc
 alembic
 asyncpgsa
-gunicorn
 ipdb
 ipython
 factory-boy
@@ -13,6 +12,7 @@ pytest-aiohttp
 pytest-cov
 marshmallow
 passlib
+pip-tools
 python-socketio==4.6.1
 psycopg2
 SQLAlchemy
