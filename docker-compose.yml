@@ -1,0 +1,57 @@
+version: "3.7"
+
+volumes:
+  local_postgres_data: {}
+
+services:
+  backend:
+    build: ./backend/
+    container_name: backend
+    command: python -m api
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    env_file: .env
+    depends_on:
+      - postgres
+    volumes:
+      - .:/srv/video-call-test
+    stdin_open: true
+    tty: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  client:
+    build: ./client/
+    container_name: client
+    command: /bin/sh run_client.sh
+    ports:
+      - "${CLIENT_PORT}:${CLIENT_PORT}"
+    env_file: .env
+    depends_on:
+      - backend
+    volumes:
+      - .:/srv/video-call-test
+    stdin_open: true
+    tty: true
+    restart: always
+    user: ${SYSTEM_USER}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  postgres:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: postgres
+    ports:
+    - "5432:5432"
+    env_file: .env
+    restart: always
+    volumes:
+      - local_postgres_data:/var/lib/postgresql/data
